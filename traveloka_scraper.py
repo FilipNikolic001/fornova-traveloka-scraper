@@ -1,14 +1,13 @@
 """
 Traveloka Hotel Room Rates Scraper
 =================================
-Fornova Junior Scraping Expert - Home Task
 
 A resilient, request-first Python scraper designed to extract room rates, taxes, and occupancy 
 details from Traveloka's internal JSON API. It uses TLS/HTTP2 session impersonation (via curl_cffi) 
 for the primary high-performance request flow, and integrates a browser-assisted network 
 interception fallback to recover gracefully from high-threshold bot challenges.
 
-Author: Filip (Junior Scraping Expert Candidate)
+Author: Filip
 """
 
 import os

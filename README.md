@@ -1,7 +1,5 @@
 # Traveloka Resilient Hotel Room Rates Scraper
 
-**Fornova Junior Scraping Expert — Take-Home Assignment Submission**
-
 A structured, resilient, and request-first Python scraper designed to dynamically extract room rates, taxes, cancellation policies, and occupancy configurations from Traveloka's hotel detail pages in real-time. 
 
 Rather than relying on fragile HTML parsing, this solution is built on a reverse-engineered API extraction workflow that directly queries Traveloka's internal JSON endpoints.
