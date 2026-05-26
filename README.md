@@ -19,10 +19,13 @@ During the architectural planning of this solution, several key engineering deci
 3. **Browser-Assisted Network Interception Fallback:** 
    Automated browsers are resource-intensive and slow. Therefore, a headful Chromium browser (via Playwright) is integrated strictly as a **secondary recovery fallback mechanism**. It is only invoked if the request-first tier encounters restrictive network-level barriers (e.g., HTTP 202/403/405 challenges). By loading the page in a real browser and hooking directly into the network sockets to capture the authentic `200 OK` API response, it recovers the data gracefully even under challenging network conditions.
 
-4. **Schema-Aware Defensive Parsing:** 
+4. **Persistent Session Caching (WAF Memory):** 
+   When the browser fallback successfully resolves a CAPTCHA, it persists the resulting Playwright `storage_state` (including vital security cookies like `tv-browser-id` and `AWSALB`) to a local `session_cache.json`. Subsequent scraper executions inject these cookies directly into the fast-path `curl_cffi` HTTP requests. This architecture drastically reduces CAPTCHA occurrences by allowing the backend gateway to recognize the session as a pre-validated "trusted browser" without incurring the overhead of launching Playwright on every run.
+
+5. **Schema-Aware Defensive Parsing:** 
    The parsing layer is built defensively to tolerate response schema variations. All numeric conversions, occupancy integers, and currency fields are guarded with default fallbacks and strict try-except blocks, ensuring the script processes the room data and outputs structured JSON without crashing if optional API keys are missing.
 
-5. **Self-Healing Versioning Synchronization:**
+6. **Self-Healing Versioning Synchronization:**
    Internal backend gateways are protected by validating frontend client version headers (`www-app-version`). Hardcoded versions inevitably expire, causing requests to be rejected. The scraper includes a self-healing regex module that executes a high-speed pre-flight GET request to extract the currently active release token from the landing page's HTML structure, dynamically updating request sessions in real-time for production-grade longevity.
 
 ---
@@ -116,6 +119,7 @@ python traveloka_scraper.py
 ```
 
 ### 3. Pipeline Runtime Behavior
-* The script initiates **Step 1 (Direct Requests)** using the high-performance `curl_cffi` TLS/HTTP2 session. If the connection succeeds, the data is captured instantly, and the program terminates.
+* The script first looks for `session_cache.json` and injects pre-validated security cookies into the fast-path session if available.
+* It then initiates **Step 1 (Direct Requests)** using the high-performance `curl_cffi` TLS/HTTP2 session. If the connection succeeds (bypassing WAF via cached cookies or clean IP), the data is captured instantly, and the program terminates.
 * If the gateway restricts direct access (returning WAF challenge headers or HTTP blocks), the script transitions to **Step 2 (Browser-Assisted Fallback)**. A headful browser window is displayed to allow the session to settle and let UI resources load.
-* Once the browser successfully retrieves the `200 OK` room response, the socket-level interceptor automatically captures the raw JSON payload, closes the browser instance, and outputs the formatted room rates to `rates_output.json`.
+* Once the browser successfully retrieves the `200 OK` room response, the socket-level interceptor automatically captures the raw JSON payload, saves the new session state to `session_cache.json`, closes the browser instance, and outputs the formatted room rates to `rates_output.json`.
