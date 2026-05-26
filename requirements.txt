@@ -1,0 +1,8 @@
+# Core HTTP client — standard requests is the base requirement.
+# curl_cffi is optional but strongly recommended: enables TLS/JA3/HTTP2 fingerprint impersonation
+# to significantly reduce WAF bot-detection triggers.
+requests>=2.31.0
+curl_cffi>=0.5.10  # Optional: pip install curl_cffi
+
+# Browser-assisted fallback (only required if direct requests are blocked by WAF)
+playwright>=1.40.0  # Optional: pip install playwright && playwright install chromium
