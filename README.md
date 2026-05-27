@@ -113,13 +113,25 @@ playwright install chromium
 ```
 
 ### 2. Run the Scraper
-Execute the script directly from the terminal:
+You can run the script without any arguments to use the default target, or you can pass *any* Traveloka hotel URL as a command-line argument. The script automatically handles both Search URLs (with `?spec=...`) and direct SEO URLs!
+
 ```bash
+# Option 1: Run with the built-in default target
 python traveloka_scraper.py
+
+# Option 2: Run with a custom Traveloka Hotel URL
+python traveloka_scraper.py "https://www.traveloka.com/en-en/hotel/indonesia/the-apurva-kempinski-bali-3000020019601"
 ```
 
-### 3. Pipeline Runtime Behavior
+*Note on URL parsing:* If the URL lacks the `spec` parameter (like the SEO URL above), the script intelligently extracts the Hotel ID from the URL path and defaults the search dates to tomorrow to ensure the API receives a valid payload.
+
+### 3. Why `session_cache.json` is included in this repository
+You will notice a `session_cache.json` file committed to this repository. In a standard production environment, session state files containing cookies are added to `.gitignore`. 
+
+However, for the purpose of this technical assessment, it is included so that reviewers can execute the script and **immediately experience the "Fast Path" (Tier 1) request execution**. The script will read this file, inject the pre-validated security cookies into the `curl_cffi` HTTP session, and bypass the WAF without triggering the heavy browser fallback.
+
+### 4. Pipeline Runtime Behavior
 * The script first looks for `session_cache.json` and injects pre-validated security cookies into the fast-path session if available.
 * It then initiates **Step 1 (Direct Requests)** using the high-performance `curl_cffi` TLS/HTTP2 session. If the connection succeeds (bypassing WAF via cached cookies or clean IP), the data is captured instantly, and the program terminates.
 * If the gateway restricts direct access (returning WAF challenge headers or HTTP blocks), the script transitions to **Step 2 (Browser-Assisted Fallback)**. A headful browser window is displayed to allow the session to settle and let UI resources load.
-* Once the browser successfully retrieves the `200 OK` room response, the socket-level interceptor automatically captures the raw JSON payload, saves the new session state to `session_cache.json`, closes the browser instance, and outputs the formatted room rates to `rates_output.json`.
+* Once the browser successfully retrieves the `200 OK` room response, the socket-level interceptor automatically captures the raw JSON payload, saves the new session state to `session_cache.json` (refreshing the cookies for future runs), closes the browser instance, and outputs the formatted room rates to `rates_output.json`.
