@@ -16,6 +16,7 @@ import json
 import time
 import re
 import uuid
+import argparse
 from datetime import datetime
 from urllib.parse import urlparse, parse_qs, unquote, quote
 from typing import Union, List, Dict, Any
@@ -58,15 +59,47 @@ class WAFBlockException(Exception):
 
 def parse_spec_from_url(url: str) -> Dict[str, Any]:
     """
-    Parse the Traveloka 'spec' query parameter defensively.
-    Format: DD-MM-YYYY.DD-MM-YYYY.rooms.adults.TYPE.ID.name
+    Parse the Traveloka 'spec' query parameter defensively, or extract from SEO path.
     """
     try:
         parsed = urlparse(url)
         query = parse_qs(parsed.query)
         spec_raw = query.get("spec", [""])
+        
         if not spec_raw or not spec_raw[0]:
-            raise ValueError("The 'spec' query parameter is missing or empty in the target URL.")
+            # Fallback: Try to extract hotel ID from the end of an SEO URL
+            # e.g. https://www.traveloka.com/en-en/hotel/indonesia/the-apurva-kempinski-bali-3000020019601
+            path_parts = parsed.path.rstrip("/").split("/")
+            last_part = path_parts[-1] if path_parts else ""
+            
+            # Usually the hotel ID is the last numeric sequence after a dash
+            match = re.search(r'-(\d+)$', last_part)
+            if not match and last_part.isdigit():
+                match = re.search(r'^(\d+)$', last_part)
+                
+            if match:
+                hotel_id = match.group(1)
+                slug = last_part[:match.start()] if last_part[:match.start()] else "hotel"
+                
+                # Default to tomorrow for check-in to ensure valid dates
+                from datetime import timedelta
+                now = datetime.now()
+                ci = now + timedelta(days=1)
+                co = ci + timedelta(days=1)
+                
+                print(f"[*] 'spec' not found. Using hotel ID {hotel_id} with default dates ({ci.strftime('%d-%m-%Y')}).")
+                
+                return {
+                    "checkin": ci.strftime("%d-%m-%Y"),
+                    "checkout": co.strftime("%d-%m-%Y"),
+                    "rooms": 1,
+                    "adults": 1,
+                    "type": "HOTEL",
+                    "hotel_id": hotel_id,
+                    "slug": slug,
+                    "slug_suffix": "",
+                }
+            raise ValueError("The 'spec' query parameter is missing and the URL path does not contain a valid hotel ID.")
             
         spec_decoded = unquote(spec_raw[0])
         parts = spec_decoded.split(".")
@@ -483,11 +516,20 @@ class TravelokaScraper:
 # ---------------------------------------------------------------------------
 
 def main():
+    parser = argparse.ArgumentParser(description="Traveloka Resilient Hotel Room Rates Scraper")
+    parser.add_argument(
+        "url", 
+        nargs="?", 
+        default=TARGET_URL, 
+        help="Optional target Traveloka URL. If omitted, uses the default built-in URL."
+    )
+    args = parser.parse_args()
+
     print("=" * 75)
     print(" Traveloka Resilient Hotel Room Rates Scraper (Request-First Hybrid Pipeline)")
     print("=" * 75)
     
-    scraper = TravelokaScraper(TARGET_URL)
+    scraper = TravelokaScraper(args.url)
     
     try:
         # Step 1: Attempt direct API query via HTTP Request Session
@@ -501,7 +543,7 @@ def main():
         print("[*] Initiating browser-assisted recovery fallback...")
         
         try:
-            live_data = harvest_data_via_browser(TARGET_URL)
+            live_data = harvest_data_via_browser(args.url)
             print("[+] Browser interception recovered successfully! Parsing dynamic JSON payload...")
             rates = scraper.parse_rates(live_data)
             
@@ -524,7 +566,7 @@ def main():
     print("\n" + "=" * 75)
     print(f"[+] Successfully structured {len(rates)} live rates to: {output_filename}")
     print("=" * 75)
-    print(json.dumps(output, indent=4, ensure_ascii=False))
+    # print(json.dumps(output, indent=4, ensure_ascii=False))
 
 
 if __name__ == "__main__":
